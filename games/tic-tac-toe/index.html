@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>井字棋游戏</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>井字棋游戏</h1>
+        <div class="info">
+            <div class="status" id="status">玩家 X 的回合</div>
+            <div class="scores">
+                <span>X: <span id="scoreX">0</span></span>
+                <span>O: <span id="scoreO">0</span></span>
+            </div>
+        </div>
+
+        <div class="game-board" id="gameBoard">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+
+        <button class="reset-btn" id="resetBtn">新游戏</button>
+        <button class="reset-scores-btn" id="resetScoresBtn">重置分数</button>
+
+        <div class="mode-selector">
+            <label>游戏模式：</label>
+            <select id="modeSelect">
+                <option value="pvp">玩家 vs 玩家</option>
+                <option value="pvc">玩家 vs 电脑</option>
+            </select>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
