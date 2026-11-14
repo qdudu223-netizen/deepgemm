@@ -36,10 +36,14 @@ def pre_inline(text):
                 and not out[-1].startswith('#'):
             # layout-only: give each marked line its own paragraph so it gets its own colour
             out.append('')
+        split_after = (not in_fence) and line.startswith('**Q1 描述题框架**')
         if not in_fence:
             line = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', line)
             line = re.sub(r'(?<![\*\w])\*([^*\n]+?)\*(?![\*\w])', r'<em>\1</em>', line)
         out.append(line)
+        if split_after:
+            # layout-only: put the Q1 framework label on its own line so its body folds like Q3/Q4
+            out.append('')
     return '\n'.join(out)
 
 

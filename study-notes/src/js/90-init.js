@@ -1,5 +1,6 @@
 /* ===================================================================== start */
 var Render = {
+  soon: debounce(function () { Render.all(); }, 300),
   all: function () {
     Modes.applyAll();
     $$('#doc .folio.is-folded').forEach(function (f) { f.classList.remove('is-folded'); });
@@ -17,6 +18,19 @@ function init() {
   fillIcons(ROOT);
   $$('#doc .kw-chip').forEach(function (k) { k.setAttribute('role', 'button'); k.tabIndex = 0; k.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); k.click(); } }); });
   $$('#doc .sn-head').forEach(function (h) { h.setAttribute('tabindex', '0'); });
+  if (window.innerWidth < 560) $('#q').placeholder = '搜索全文（空格分隔多词）';
+  /* paper never shows masked (blank) text */
+  var printMasks = null;
+  window.addEventListener('beforeprint', function () {
+    var b = document.body.classList;
+    printMasks = ['mask-kw', 'mask-num', 'hlmask-all', 'hlmask-blue', 'hlmask-yellow', 'hlmask-red'].filter(function (c) { return b.contains(c); });
+    printMasks.forEach(function (c) { b.remove(c); });
+    $$('.folio.is-masked').forEach(function (f) { f.classList.add('was-masked'); f.classList.remove('is-masked'); });
+  });
+  window.addEventListener('afterprint', function () {
+    (printMasks || []).forEach(function (c) { document.body.classList.add(c); });
+    $$('.folio.was-masked').forEach(function (f) { f.classList.remove('was-masked'); f.classList.add('is-masked'); });
+  });
   Side.init();
   TOC.build();
   Fold.restore(); Fold.bind(); Answers.bind(); Progress.bind(); Mask.bindSections();

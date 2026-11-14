@@ -18,7 +18,7 @@ function buildTools() {
       b.type = 'button'; b.className = 'tbtn'; b.setAttribute('data-tool', t.id);
       b.title = t.label; b.setAttribute('aria-label', t.label);
       if (t.toggle) b.setAttribute('aria-pressed', 'false');
-      b.innerHTML = icon(t.icon) + '<span class="tl">' + (i === 0 ? t.label : t.short) + '</span><span class="dot"></span>';
+      b.innerHTML = icon(t.icon) + '<span class="tl">' + (i === 0 ? t.label : t.short) + '</span>' + (i === 0 ? '<span class="tl-s">' + t.short + '</span>' : '') + '<span class="dot"></span>';
       host.appendChild(b);
     });
   });
@@ -47,15 +47,29 @@ var Side = {
     $('#side-close').addEventListener('click', function () { self.close(); });
     $('#scrim').addEventListener('click', function () { self.close(); });
     $$('.side-tab').forEach(function (b) { b.addEventListener('click', function () { self.tab(b.getAttribute('data-tab')); }); });
+    window.addEventListener('resize', debounce(function () { self.syncInert(); }, 150));
+    this.syncInert();
   },
   isDrawer: function () { return window.innerWidth < 1100; },
+  /* a closed drawer is off-screen: keep it out of the Tab order */
+  syncInert: function () {
+    var off = this.isDrawer() && !this.el.classList.contains('open');
+    if (off || modalStack.length) this.el.setAttribute('inert', ''); else this.el.removeAttribute('inert');
+  },
   toggle: function () { if (this.el.classList.contains('open')) this.close(); else this.open(); },
   open: function (tab) {
     if (tab) this.tab(tab);
     if (!this.isDrawer()) return;
     this.el.classList.add('open'); $('#scrim').classList.add('open');
+    this.syncInert();
+    var t = $('.side-tab[aria-selected="true"]', this.el); if (t) setTimeout(function () { try { t.focus({ preventScroll: true }); } catch (e) {} }, 60);
   },
-  close: function () { this.el.classList.remove('open'); $('#scrim').classList.remove('open'); },
+  close: function () {
+    var was = this.el.classList.contains('open');
+    this.el.classList.remove('open'); $('#scrim').classList.remove('open');
+    this.syncInert();
+    if (was && this.isDrawer()) { var m = $('#btn-menu'); if (m && m.offsetParent) m.focus({ preventScroll: true }); }
+  },
   tab: function (name) {
     $$('.side-tab').forEach(function (b) { b.setAttribute('aria-selected', b.getAttribute('data-tab') === name ? 'true' : 'false'); });
     $$('.side-panel').forEach(function (p) { p.hidden = p.id !== 'panel-' + name; });
@@ -134,10 +148,10 @@ var TOC = {
     var chapters = $$('#doc > .chapter, #doc > section.overview');
     chapters.forEach(function (ch) {
       if (ch.classList.contains('overview')) {
-        html += '<div class="toc-chap"><a href="#overview"><span class="tn">◇</span><span>学习概览（补充）</span></a></div>';
+        html += '<div class="toc-chap toc-supp"><a href="#overview"><span class="tn">◇</span><span>学习概览（补充）</span></a></div>';
         return;
       }
-      var h2 = $('h2', ch), num = ($('.chap-numeral', ch) || {}).textContent || '';
+      var h2 = $('h2', ch), num = ($('h2 .hnum', ch) || $('.chap-numeral', ch) || {}).textContent || '';
       var title = h2 ? txt(h2).replace(/^🔵\s*/, '').replace(/^§\d+\s*/, '') : '';
       html += '<div class="toc-chap"><a href="#' + ch.id + '"><span class="tn">' + esc(num) + '</span><span>' + esc(title) + '</span></a><ul class="toc-list">';
       $$('.folio', ch).forEach(function (f) {
@@ -289,6 +303,14 @@ var Answers = {
   },
   bind: function () {
     DOC.addEventListener('click', function (e) {
+      var ca = e.target.closest('.cloze-all');
+      if (ca) {
+        var on = ca.getAttribute('aria-expanded') !== 'true', tw = ca.closest('.answer-bar').nextElementSibling;
+        while (tw && !tw.querySelector('.cloze-cell')) tw = tw.nextElementSibling;
+        if (tw) $$('.cloze-cell', tw).forEach(function (c) { c.classList.toggle('peek', on); });
+        ca.setAttribute('aria-expanded', on ? 'true' : 'false'); ca.textContent = on ? '收起判断' : ca.getAttribute('data-label');
+        return;
+      }
       var b = e.target.closest('.ans-toggle');
       if (b) { var a = b.closest('.answer'); Answers.set(a, !a.classList.contains('open')); return; }
       var m = e.target.closest('.mm-src-toggle');
@@ -390,7 +412,7 @@ var Resume = {
     setTimeout(function () { $('#resume').hidden = true; }, 15000);
   },
   go: function () {
-    var p = this.saved || S.pos; if (!p || !p.sid) return;
+    var p = this.saved || S.pos; if (!p || !p.sid) { toast('还没有记录阅读位置：往下读一会儿，下次打开就能回到这里'); return; }
     var f = document.getElementById(p.sid); if (!f) return;
     openAncestors(f); Side.afterNav();
     var y = f.getBoundingClientRect().top + window.scrollY + (p.off || 0);

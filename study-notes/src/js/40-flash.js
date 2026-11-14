@@ -82,6 +82,7 @@ var FC = {
     faces[1].querySelector('.fc-text').textContent = back;
     this.flipped = false;
     $('#fc-stat').textContent = (this.pos + 1) + ' / ' + total;
+    if (!$('#m-flash').hidden) { var cardEl = $('.fc-card', stage); if (cardEl) try { cardEl.focus({ preventScroll: true }); } catch (e) {} }
   },
   flip: function () { var card = $('#fc-stage .fc-card'); if (!card) return; this.flipped = !this.flipped; card.classList.toggle('flipped', this.flipped); },
   mark: function (good) {
@@ -122,12 +123,15 @@ var FC = {
       if (c.hid) { HL.jump(c.hid); return; }
       var t = document.getElementById(c.s); if (t) goTo(t);
     });
-    $('#m-flash').addEventListener('keydown', function (e) {
-      if (e.target.tagName === 'BUTTON' && e.target.id !== '' && (e.key === ' ' || e.key === 'Enter') && !e.target.classList.contains('fc-card')) return;
-      if (e.key === ' ' || e.key === 'Enter') { if (e.target.closest && e.target.closest('.fc-card')) { e.preventDefault(); self.flip(); } }
-      else if (e.key === 'ArrowLeft') { if (self.pos > 0) { self.pos--; self.render(); } }
+    document.addEventListener('keydown', function (e) {
+      if ($('#m-flash').hidden || !$('#m-confirm').hidden) return;
+      var tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      var onCard = e.target.closest && e.target.closest('.fc-card');
+      if ((e.key === ' ' || e.key === 'Enter') && (onCard || tag === 'body')) { e.preventDefault(); self.flip(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); if (self.pos > 0) { self.pos--; self.render(); } }
       else if (e.key === '1') self.mark(false);
-      else if (e.key === '2' || e.key === 'ArrowRight') self.mark(true);
+      else if (e.key === '2' || e.key === 'ArrowRight') { e.preventDefault(); self.mark(true); }
     });
   }
 };

@@ -52,12 +52,14 @@ var Search = {
     var count = 0;
     var MAXMARK = 500;
     hits.slice(0, MAXMARK).forEach(function (u) { count += Search.markIn(u.el, terms); });
-    this.marks = $$('mark.sh', DOC);
+    this.marks = $$('mark.sh0', DOC);
+    this.count = count;
     HL.dirty();
-    $('#q-count').textContent = hits.length ? (this.marks.length + ' 处') : '无结果';
+    $('#q-count').textContent = hits.length ? (count + ' 处') : '无结果';
     this.renderPanel(hits, notes);
     this.cur = -1;
   },
+  /* match on the unit's joined text, so a hit may cross bold words, numbers or links */
   markIn: function (el, terms) {
     var re = new RegExp(terms.map(function (t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('|'), 'gi');
     var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
@@ -69,27 +71,35 @@ var Search = {
         return NodeFilter.FILTER_ACCEPT;
       }
     });
-    var nodes = [], n, c = 0;
-    while ((n = walker.nextNode())) nodes.push(n);
-    nodes.forEach(function (tn) {
-      var s = tn.nodeValue; re.lastIndex = 0;
-      var m, last = 0, frag = null;
-      while ((m = re.exec(s))) {
-        if (!m[0]) { re.lastIndex++; continue; }
-        frag = frag || document.createDocumentFragment();
-        if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
-        var mk = document.createElement('mark'); mk.className = 'sh'; mk.textContent = m[0]; frag.appendChild(mk); c++;
-        last = m.index + m[0].length;
+    var nodes = [], starts = [], joined = '', n;
+    while ((n = walker.nextNode())) { nodes.push(n); starts.push(joined.length); joined += n.nodeValue; }
+    var low = joined.toLowerCase(), m, ranges = [];
+    re.lastIndex = 0;
+    while ((m = re.exec(low))) { if (!m[0]) { re.lastIndex++; continue; } ranges.push([m.index, m.index + m[0].length]); }
+    /* wrap from the last match backwards so earlier offsets stay valid */
+    for (var r = ranges.length - 1; r >= 0; r--) {
+      var s0 = ranges[r][0], e0 = ranges[r][1], first = null;
+      for (var i = nodes.length - 1; i >= 0; i--) {
+        var tn = nodes[i], ns = starts[i], len = tn.nodeValue.length;
+        if (ns >= e0 || ns + len <= s0) continue;
+        var a = Math.max(0, s0 - ns), b = Math.min(len, e0 - ns);
+        var target = tn;
+        if (b < len) tn.splitText(b);
+        if (a > 0) target = tn.splitText(a);
+        var mk = document.createElement('mark'); mk.className = 'sh';
+        target.parentNode.insertBefore(mk, target); mk.appendChild(target);
+        first = mk;
       }
-      if (frag) { if (last < s.length) frag.appendChild(document.createTextNode(s.slice(last))); tn.parentNode.replaceChild(frag, tn); }
-    });
-    return c;
+      if (first) first.classList.add('sh0');
+    }
+    return ranges.length;
   },
   clearMarks: function () {
     var parents = [];
-    $$('mark.sh', DOC).forEach(function (m) { var p = m.parentNode; p.replaceChild(document.createTextNode(m.textContent), m); parents.push(p); });
+    /* move children out (a highlight may sit inside a hit) instead of flattening to text */
+    $$('mark.sh', DOC).forEach(function (m) { var p = m.parentNode; while (m.firstChild) p.insertBefore(m.firstChild, m); p.removeChild(m); parents.push(p); });
     parents.forEach(function (p) { if (p.isConnected) p.normalize(); });
-    this.marks = []; this.cur = -1;
+    this.marks = []; this.cur = -1; this.count = 0;
     HL.dirty();
   },
   renderPanel: function (hits, notes) {
@@ -123,7 +133,7 @@ var Search = {
     if (this.cur >= 0 && this.marks[this.cur]) this.marks[this.cur].classList.remove('cur');
     this.cur = (this.cur + d + this.marks.length) % this.marks.length;
     var m = this.marks[this.cur];
-    if (!m.isConnected) { this.marks = $$('mark.sh', DOC); return this.step(0); }
+    if (!m.isConnected) { this.marks = $$('mark.sh0', DOC); return this.step(0); }
     m.classList.add('cur');
     openAncestors(m);
     m.scrollIntoView({ block: 'center', behavior: scrollMode(m.getBoundingClientRect().top) });
@@ -135,7 +145,12 @@ var Search = {
     q.addEventListener('input', run);
     q.addEventListener('focus', function () { if (self.terms.length) $('#search-panel').hidden = false; });
     q.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); self.run(q.value.trim()); if (self.marks.length) { self.hidePanel(); self.step(e.shiftKey ? -1 : 1); } }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var v = q.value.trim();
+        if (v !== self.q) self.run(v);
+        if (self.marks.length) { self.hidePanel(); self.step(e.shiftKey ? -1 : 1); }
+      }
       if (e.key === 'Escape') { q.value = ''; self.run(''); q.blur(); }
     });
     $('#q-clear').addEventListener('click', function () { q.value = ''; self.run(''); q.focus(); });
@@ -147,7 +162,7 @@ var Search = {
       self.hidePanel();
       if (b.hasAttribute('data-hl')) { HL.jump(b.getAttribute('data-hl')); return; }
       var u = self._hits[+b.getAttribute('data-i')]; if (!u) return;
-      var m = u.el.querySelector('mark.sh');
+      var m = u.el.querySelector('mark.sh0');
       if (m) { var i = self.marks.indexOf(m); if (i >= 0) { self.cur = i - 1; self.step(1); return; } }
       goTo(u.el, { block: 'center' });
     });
@@ -169,24 +184,41 @@ var Search = {
 /* ===================================================================== key / pitfall indexes */
 var Index = {
   built: {},
+  clean: function (el) {
+    var c = el.cloneNode(true);
+    $$('[data-supp], .supp, .sn, .js-only', c).forEach(function (x) { x.remove(); });
+    return txt(c);
+  },
   collect: function (kind) {
-    var items = [];
+    var items = [], self = this;
     var tone = kind === 'key' ? 't-key' : 't-warn';
     $$('#doc .' + tone).forEach(function (el) {
       if (el.closest('[data-supp], #s-legend')) return;
       if (!/^(P|LI|TD)$/.test(el.tagName)) return;
-      var label = '';
-      if (el.tagName === 'TD') { var tr = el.closest('tr'); label = txt(tr.cells[0]) + ' — '; }
-      items.push({ el: el, text: label + txt(el).replace(/^(?:🔴|🟡)\s*/, ''), path: pathOf(el) });
+      var label = '', text = self.clean(el).replace(/^(?:🔴|🟡)\s*/, '');
+      if (el.tagName === 'TD') {
+        var tr = el.closest('tr');
+        label = self.clean(tr.cells[0]) + ' — ';
+        if (/^见上|^见 ?§/.test(text) && tr.cells[2]) text = self.clean(tr.cells[2]) + '（' + text + '）';
+      }
+      /* a bare “核查” header: index the corrections listed under it instead */
+      if (el.tagName === 'P' && /^核查/.test(text) && text.length < 40) {
+        var list = el.nextElementSibling;
+        if (list && /^(UL|OL)$/.test(list.tagName)) {
+          $$(':scope > li', list).forEach(function (li) { items.push({ el: li, text: '核查：' + self.clean(li), path: pathOf(li) }); });
+          return;
+        }
+      }
+      items.push({ el: el, text: label + text, path: pathOf(el) });
     });
     if (kind === 'key') {
       $$('#doc .folio.folio-key').forEach(function (f) { items.push({ el: f, text: '整节：' + (f.getAttribute('data-title') || ''), path: '核心考点整节' }); });
-      $$('#doc tr.star').forEach(function (tr) { items.push({ el: tr.cells[0], text: '⭐ ' + txt(tr.cells[0]) + '：' + txt(tr.cells[1]), path: pathOf(tr) }); });
+      $$('#doc tr.star').forEach(function (tr) { var t0 = self.clean(tr.cells[0]); items.push({ el: tr.cells[0], text: (t0.indexOf('⭐') === 0 ? '' : '⭐ ') + t0 + '：' + self.clean(tr.cells[1]), path: pathOf(tr) }); });
     } else {
       $$('#doc .table-wrap table').forEach(function (t) {
         var h = t.rows[0] && t.rows[0].cells[0];
         if (h && txt(h) === '易混点') {
-          for (var i = 1; i < t.rows.length; i++) items.push({ el: t.rows[i].cells[0], text: txt(t.rows[i].cells[0]) + '：' + txt(t.rows[i].cells[1]), path: pathOf(t) });
+          for (var i = 1; i < t.rows.length; i++) items.push({ el: t.rows[i].cells[0], text: self.clean(t.rows[i].cells[0]) + '：' + self.clean(t.rows[i].cells[1]), path: pathOf(t) });
         }
       });
     }
@@ -198,11 +230,12 @@ var Index = {
     var items = this.collect(kind), host = $('#panel-' + kind);
     var intro = kind === 'key'
       ? '原文标 🔴 的核心考点、⭐ 关键转折和整节考点卡，按出现顺序排列。点按跳到原文。'
-      : '原文标 🟡 的易混易错、作答陷阱与“易错辨析”表，按出现顺序排列。点按跳到原文。';
+      : '原文标 🟡 的易混易错、核查更正与“易错辨析”表，按出现顺序排列。点按跳到原文。';
     var html = '<p class="idx-empty" style="padding:2px 6px 8px">' + intro + '（共 ' + items.length + ' 条）</p>';
     var lastChap = '';
     items.forEach(function (it, i) {
-      var ch = it.el.closest('.chapter'), chT = ch ? (($('.chap-numeral', ch) || {}).textContent + ' ' + txt($('h2', ch)).replace(/^🔵\s*§?\d*\s*/, '')) : '';
+      var ch = it.el.closest('.chapter');
+      var chT = ch ? txt($('h2', ch)).replace(/^🔵\s*/, '') : '';
       if (chT !== lastChap) { html += '<div class="idx-group"><h4>' + esc(chT) + '</h4></div>'; lastChap = chT; }
       var t = it.text.length > 90 ? it.text.slice(0, 90) + '…' : it.text;
       html += '<button type="button" class="idx-item ' + (kind === 'key' ? 'k' : 'w') + '" data-i="' + i + '">' + esc(t) + '<small>' + esc(it.path) + '</small></button>';
@@ -210,7 +243,8 @@ var Index = {
     host.innerHTML = html;
     host.addEventListener('click', function (e) {
       var b = e.target.closest('.idx-item'); if (!b) return;
-      goTo(items[+b.getAttribute('data-i')].el, { block: 'center' });
+      var el = items[+b.getAttribute('data-i')].el;
+      goTo(el, { block: el.classList.contains('folio') ? 'start' : 'center' });
     });
     this.built[kind] = true;
   }
@@ -283,6 +317,7 @@ var Settings = {
     if (Cloud.status === 'on') where.push('<span class="ok">Claude 云端（随账号保存）✓</span>');
     else if (Cloud.status === 'connecting') where.push('Claude 云端连接中…');
     else if (Cloud.status === 'readonly') where.push('Claude 云端：当前账号只读');
+    else if (Cloud.status === 'toolarge') where.push('Claude 云端空间已满（标记太多），请定期用备份码保存');
     var hlN = Object.keys(S.hl).filter(function (k) { return !S.hl[k].del; }).length;
     $('#st-status').innerHTML = '保存位置：' + where.join('；') + '。当前有 ' + hlN + ' 条荧光标记。';
     $('#bk-download').hidden = !(this.dl || !FRAMED);
@@ -316,8 +351,12 @@ var Settings = {
     $('#st-reset').addEventListener('click', function () {
       confirmBox('确定要重置全部学习记录吗？荧光标记、批注、掌握进度、复习日期、闪卡熟练度和设置都会清除。建议先生成备份码。', '全部重置').then(function (ok) {
         if (!ok) return;
-        var keepHl = S.hl; S = blankState();
-        for (var id in keepHl) S.hl[id] = { id: id, del: 1, u: now() };
+        var old = S, t = now(); S = blankState();
+        for (var id in old.hl) S.hl[id] = { id: id, del: 1, u: t };
+        for (var m in old.mastered) S.mastered[m] = { v: 0, u: t };
+        for (var f in old.fc) S.fc[f] = { w: 0, n: 0, u: t };
+        for (var r in old.rev) S.rev[r] = { d: [], u: t, clr: 1 };
+        S.set.u = t;
         save(); Render.all(); toast('已重置全部学习记录'); Settings.sync();
       });
     });
@@ -355,8 +394,9 @@ var Backup = {
     var st = data && data.state ? data.state : data;
     var go = function () {
       var before = JSON.stringify(S);
-      mergeState(st); save(); Render.all();
-      toast(JSON.stringify(S) === before ? '备份中的记录与当前一致，无需更新' : '已恢复并合并备份中的记录');
+      mergeState(st, { revive: true }); save(); Render.all();
+      var n = mergeState.revived || 0;
+      toast(JSON.stringify(S) === before ? '备份中的记录与当前一致，无需更新' : ('已恢复并合并备份中的记录' + (n ? '（恢复 ' + n + ' 条荧光标记）' : '')));
       $('#bk-in').value = ''; Settings.sync();
     };
     if (data && data.app && data.app !== APP) {
@@ -368,11 +408,11 @@ var Backup = {
     var close = '<' + '/script>';
     var root = PRISTINE.replace(new RegExp('(<script type="application/json" id="fr-embedded-state">)[\\s\\S]*?(' + close + ')'), function (m0, a, b) { return a + st + b; });
     var title = '<title>' + esc(document.title || META.title) + '</title>';
-    var fonts = (document.getElementById('fr-fonts') || { outerHTML: '' }).outerHTML;
     var style = (document.getElementById('fr-style') || { outerHTML: '' }).outerHTML;
-    var early = '<script id="fr-early">document.documentElement.classList.add(\'js\');' + close;
+    var earlyEl = document.getElementById('fr-early');
+    var early = '<script id="fr-early">' + (earlyEl ? earlyEl.textContent : "document.documentElement.classList.add('js');") + close;
     return '<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n' +
-      title + '\n' + fonts + '\n' + style + '\n</head>\n<body>\n' + early + '\n' + root + '\n</body>\n</html>\n';
+      title + '\n' + early + '\n' + style + '\n</head>\n<body>\n' + root + '\n</body>\n</html>\n';
   },
   download: function () {
     var name = (META.title || '学习笔记') + '（含我的标记 ' + dayStr() + '）.html';
@@ -384,6 +424,7 @@ var Backup = {
       });
       return;
     }
+    if (FRAMED) { toast('这里无法下载文件，请改用“生成并复制备份码”'); return; }
     try {
       var blob = new Blob([data], { type: 'text/html;charset=utf-8' });
       var url = URL.createObjectURL(blob), a = document.createElement('a');

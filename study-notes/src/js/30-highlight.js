@@ -53,10 +53,14 @@ var HL = {
   segmentsOf: function (s, e) {
     var ti = this.index(), segs = [], cur = null;
     var i = Math.max(0, upperBound(ti.starts, s) - 1);
+    var nodeAt = function (pos) { return ti.nodes[Math.max(0, upperBound(ti.starts, pos) - 1)]; };
+    var sa = nodeAt(s).parentNode.closest('[data-supp]'), sb = nodeAt(Math.max(s, e - 1)).parentNode.closest('[data-supp]');
+    var inOneSupp = sa && sa === sb;
     for (; i < ti.nodes.length && ti.starts[i] < e; i++) {
       var n = ti.nodes[i], ns = ti.starts[i], len = n.nodeValue.length;
       var a = Math.max(s, ns), b = Math.min(e, ns + len);
       if (b <= a) continue;
+      if (!inOneSupp && n.parentNode.closest('[data-supp]')) continue;
       var blk = n.parentNode.closest(HL_BLOCK);
       if (!blk) { if (!n.nodeValue.trim()) continue; blk = n.parentNode; }
       if (cur && cur.blk === blk) cur.e = b;
@@ -82,7 +86,7 @@ var HL = {
     return best >= 0 ? [best, best + seg.t.length] : null;
   },
   wrap: function (s, e, r) {
-    var ti = this.ti;
+    var ti = this.ti, first = null, last = null;
     var i = Math.max(0, upperBound(ti.starts, s) - 1);
     for (; i < ti.nodes.length && ti.starts[i] < e; i++) {
       var n = ti.nodes[i], ns = ti.starts[i], len = n.nodeValue.length;
@@ -98,7 +102,11 @@ var HL = {
       mk.setAttribute('data-hid', r.id);
       target.parentNode.insertBefore(mk, target);
       mk.appendChild(target);
+      if (!first) first = mk;
+      last = mk;
     }
+    if (first) first.classList.add('hl-s');
+    if (last) last.classList.add('hl-e');
   },
   /* place a list of {s,e,r}; descending order keeps earlier offsets valid */
   place: function (items) {
@@ -218,7 +226,13 @@ var HL = {
     if (!op) { toast('没有可以撤销的操作'); return; }
     var self = this;
     if (op.t === 'add') { var r = S.hl[op.id]; if (r && !r.del) { S.hl[op.id] = { id: op.id, del: 1, u: now() }; this.unwrap(op.id); } toast('已撤销标记'); }
-    else if (op.t === 'del') { op.recs.forEach(function (rec) { var c = Object.assign({}, rec, { u: now() }); delete c.del; S.hl[c.id] = c; self.renderOne(c); }); toast('已恢复 ' + op.recs.length + ' 条标记'); }
+    else if (op.t === 'del') {
+      var items = [];
+      this.index();
+      op.recs.forEach(function (rec) { var c = Object.assign({}, rec, { u: now() }); delete c.del; S.hl[c.id] = c; var rs = self.rangesFor(c); if (rs.length) { delete self.orphans[c.id]; items = items.concat(rs); } else self.orphans[c.id] = 1; });
+      this.place(items);
+      toast('已恢复 ' + op.recs.length + ' 条标记');
+    }
     else if (op.t === 'upd') { this.update(op.id, op.before, true); toast('已撤销修改'); }
     save(); this.closePop(); this.renderList();
   },
@@ -251,7 +265,13 @@ var HL = {
     bar.hidden = false;
     var docked = COARSE || window.innerWidth < 700;
     bar.classList.toggle('docked', docked);
-    if (docked) { bar.style.left = ''; bar.style.top = ''; return; }
+    if (docked) {
+      bar.style.left = ''; bar.style.top = '';
+      bar.classList.remove('docked-top');
+      var br = bar.getBoundingClientRect(), sr = range.getBoundingClientRect();
+      if (sr.bottom > br.top - 12) bar.classList.add('docked-top');
+      return;
+    }
     var rc = range.getBoundingClientRect(), w = bar.offsetWidth, h = bar.offsetHeight;
     var top = rc.top - h - 10;
     if (top < 70) top = rc.bottom + 10;
@@ -330,6 +350,8 @@ var HL = {
   },
   closePop: function () {
     var pop = $('#hl-pop'); if (pop.hidden) return;
+    var v = $('#hp-note').value.trim();
+    if (this.popId && S.hl[this.popId] && (S.hl[this.popId].note || '') !== v) this.update(this.popId, { note: v }, true);
     pop.hidden = true;
     $$('mark.hl.is-active').forEach(function (m) { m.classList.remove('is-active'); });
     this.popId = null;
@@ -347,7 +369,8 @@ var HL = {
     $('#hp-close').addEventListener('click', function () { self.closePop(); });
     var note = $('#hp-note');
     note.addEventListener('focus', function () { if (self.popId) self.noteBefore = { id: self.popId, note: S.hl[self.popId].note || '' }; });
-    note.addEventListener('input', debounce(function () { if (self.popId) self.update(self.popId, { note: note.value.trim() }, true); }, 350));
+    var noteSave = debounce(function (id, v) { if (S.hl[id] && !S.hl[id].del && (S.hl[id].note || '') !== v) self.update(id, { note: v }, true); }, 350);
+    note.addEventListener('input', function () { if (self.popId) noteSave(self.popId, note.value.trim()); });
     note.addEventListener('blur', function () {
       var nb = self.noteBefore; self.noteBefore = null;
       if (nb && S.hl[nb.id] && (S.hl[nb.id].note || '') !== nb.note) {
@@ -402,7 +425,7 @@ var HL = {
     var lastSec = null;
     list.forEach(function (r) {
       var orphan = !pos[r.id];
-      var sec = orphan ? '未能在当前页面定位' : (function () { var fo = pos[r.id].closest('.folio'); return fo ? fo.getAttribute('data-title') : '卷首与概览'; })();
+      var sec = orphan ? '未能在当前页面定位' : HL.groupLabel(pos[r.id]);
       if (sec !== lastSec) { html += '<div class="idx-group"><h4>' + esc(sec) + '</h4></div>'; lastSec = sec; }
       var t = self.textOf(r);
       html += '<button type="button" class="hl-item c-' + r.c + (orphan ? ' orphan' : '') + '" data-id="' + r.id + '">' + esc(t.length > 110 ? t.slice(0, 110) + '…' : t) +
@@ -449,9 +472,9 @@ var HL = {
     var all = this.active();
     all.forEach(function (r) {
       var m = DOC.querySelector('mark.hl[data-hid="' + r.id + '"]');
-      var fo = m ? m.closest('.folio') : (r.sid ? document.getElementById(r.sid) : null);
-      var key = fo ? fo.getAttribute('data-title') : '卷首与概览';
-      if (!bySec[key]) { bySec[key] = { title: key, el: m || fo, items: [] }; groups.push(bySec[key]); }
+      var host = m || (r.sid ? document.getElementById(r.sid) : null);
+      var key = host ? HL.groupLabel(host) : '未能在当前页面定位';
+      if (!bySec[key]) { bySec[key] = { title: key, el: host, items: [] }; groups.push(bySec[key]); }
       bySec[key].items.push({ r: r, m: m });
     });
     groups.sort(function (a, b) { if (a.el && b.el) return a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1; return a.el ? -1 : 1; });
@@ -460,6 +483,7 @@ var HL = {
       out += '\n## ' + g.title + '\n';
       COLORS.forEach(function (c) {
         var items = g.items.filter(function (x) { return x.r.c === c; });
+        items.sort(function (x, y) { if (x.m && y.m) return x.m.compareDocumentPosition(y.m) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1; return x.m ? -1 : 1; });
         if (!items.length) return;
         out += '\n### ' + self.colorName(c) + '（' + { blue: '蓝', yellow: '黄', red: '红' }[c] + '）\n\n';
         items.forEach(function (x) { out += '- ' + self.textOf(x.r).replace(/\s+/g, ' ') + '\n'; if (x.r.note) out += '  - 批注：' + x.r.note.replace(/\s+/g, ' ') + '\n'; });
@@ -475,6 +499,13 @@ var HL = {
       else fallback();
     } catch (e) { fallback(); }
   },
+  groupLabel: function (el) {
+    var fo = el.closest('.folio');
+    if (fo) return fo.getAttribute('data-title');
+    var ch = el.closest('.chapter');
+    if (ch && ch.id !== 'c-front') { var h2 = $('h2', ch); if (h2) return txt(h2).replace(/^🔵\s*/, ''); }
+    return '卷首与概览';
+  },
   refreshNames: function () { this.renderList(); if (Settings) Settings.sync(); },
   searchNotes: function (terms) {
     var self = this;
@@ -487,8 +518,11 @@ var HL = {
   cards: function () {
     var self = this;
     return this.active().filter(function (r) { return r.card; }).map(function (r) {
-      var s = r.segs[0];
-      return { id: 'hl:' + r.id, deck: '我的荧光笔', f: '…' + s.pre.slice(-14) + '［　　］' + s.suf.slice(0, 14) + '…', b: self.textOf(r) + (r.note ? '\n批注：' + r.note : ''), s: r.sid, hid: r.id };
+      var clean = function (t) { return t.replace(/\s*\n[\s\S]*$/, '').replace(/\s+/g, ' '); };
+      var pre = r.segs[0].pre, suf = r.segs[r.segs.length - 1].suf;
+      pre = pre.replace(/^[\s\S]*\n/, '').replace(/\s+/g, ' ').slice(-16);
+      suf = clean(suf).slice(0, 16);
+      return { id: 'hl:' + r.id, deck: '我的荧光笔', f: (pre ? '…' + pre : '') + '［　　］' + (suf ? suf + '…' : ''), b: self.textOf(r) + (r.note ? '\n批注：' + r.note : ''), s: r.sid, hid: r.id };
     });
   },
 
@@ -517,7 +551,7 @@ var HL = {
     document.addEventListener('keydown', function (e) {
       var tag = (e.target.tagName || '').toLowerCase();
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && tag !== 'input' && tag !== 'textarea') { e.preventDefault(); self.undo(); }
-      if (e.key === 'Escape') { self.closePop(); self.hideBar(); RefPop.hide(); var m = $('#pen-menu'); if (m) m.hidden = true; if (modalStack.length) closeModal(modalStack[modalStack.length - 1].m.id); else if (document.body.classList.contains('focus')) Modes.setFocus(false); }
+      if (e.key === 'Escape') { if ($('#sidebar').classList.contains('open') && !modalStack.length) Side.close(); self.closePop(); self.hideBar(); RefPop.hide(); var m = $('#pen-menu'); if (m) m.hidden = true; if (modalStack.length) closeModal(modalStack[modalStack.length - 1].m.id); else if (document.body.classList.contains('focus')) Modes.setFocus(false); }
     });
     this.bindPop(); this.bindList(); this.syncUndo();
   }

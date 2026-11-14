@@ -80,6 +80,7 @@ var modalStack = [];
 function openModal(id, opener) {
   var m = document.getElementById(id); if (!m) return;
   m.hidden = false; modalStack.push({ m: m, opener: opener || document.activeElement });
+  setBackgroundInert(true);
   var f = m.querySelector('[data-autofocus]') || m.querySelector('button, input, textarea');
   if (f) setTimeout(function () { try { f.focus({ preventScroll: true }); } catch (e) {} }, 30);
 }
@@ -87,7 +88,12 @@ function closeModal(id) {
   var m = document.getElementById(id); if (!m || m.hidden) return;
   m.hidden = true;
   for (var i = modalStack.length - 1; i >= 0; i--) if (modalStack[i].m === m) { var o = modalStack[i].opener; modalStack.splice(i, 1); if (o && o.focus) try { o.focus({ preventScroll: true }); } catch (e) {} break; }
+  if (!modalStack.length) setBackgroundInert(false);
   if (id === 'm-flash' && FC.onClose) FC.onClose();
+}
+function setBackgroundInert(on) {
+  ['topbar', 'sidebar', 'main', 'bottombar', 'scrim'].forEach(function (id) { var el = document.getElementById(id); if (el) { if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert'); } });
+  if (!on && typeof Side !== 'undefined' && Side.el) Side.syncInert();
 }
 function confirmBox(text, okLabel) {
   return new Promise(function (res) {
@@ -125,42 +131,59 @@ function normalize(st) {
   if (st.pos && typeof st.pos === 'object') b.pos = st.pos;
   return b;
 }
-/* merge `inc` into S; newest `u` wins per record; review dates are unioned */
-function mergeState(inc) {
+/* merge `inc` into S; newest `u` wins per record; review dates are unioned unless a reset cleared them.
+   opts.revive: an explicitly pasted backup brings back highlights that were deleted here. */
+function mergeState(inc, opts) {
   inc = normalize(inc);
-  var changed = false;
+  var changed = false, revived = 0;
   ['hl', 'mastered', 'fc'].forEach(function (k) {
     var src = inc[k], dst = S[k];
     for (var id in src) {
       var a = dst[id], b = src[id];
       if (!b) continue;
-      if (!a || (b.u || 0) > (a.u || 0)) { dst[id] = b; changed = true; }
+      if (k === 'hl' && opts && opts.revive && a && a.del && !b.del && b.segs) {
+        dst[id] = Object.assign({}, b, { u: now() }); delete dst[id].del; changed = true; revived++; continue;
+      }
+      if (!a || (b.u || 0) > (a.u || 0)) { dst[id] = b; changed = true; if (k === 'hl' && !b.del && (!a || a.del)) revived++; }
     }
   });
   for (var sid in inc.rev) {
     var a = S.rev[sid], b = inc.rev[sid];
     if (!b || !Array.isArray(b.d)) continue;
     if (!a) { S.rev[sid] = b; changed = true; continue; }
+    if (a.clr || b.clr) { if ((b.u || 0) > (a.u || 0)) { S.rev[sid] = b; changed = true; } continue; }
     var set = {}; (a.d || []).concat(b.d).forEach(function (d) { set[d] = 1; });
     var merged = Object.keys(set).sort();
     if (merged.length !== (a.d || []).length) { a.d = merged; a.u = Math.max(a.u || 0, b.u || 0); changed = true; }
   }
   if ((inc.set.u || 0) > (S.set.u || 0)) { S.set = inc.set; changed = true; }
   if ((inc.pos.u || 0) > (S.pos.u || 0)) { S.pos = inc.pos; }
+  mergeState.revived = revived;
   return changed;
 }
-var saveLocalSoon = debounce(function () { lsSet(JSON.stringify(S)); }, 350);
+/* write local storage, first folding in whatever another tab saved meanwhile */
+function syncLocal() {
+  var raw = lsGet();
+  if (raw) { try { if (mergeState(JSON.parse(raw)) && typeof Render !== 'undefined') Render.soon(); } catch (e) {} }
+  lsSet(JSON.stringify(S));
+}
+var saveLocalSoon = debounce(syncLocal, 350);
 function save(opts) {
   saveLocalSoon();
   if (!(opts && opts.localOnly)) Cloud.saveSoon();
 }
-function flush() { lsSet(JSON.stringify(S)); Cloud.flush(); }
+function flush() { syncLocal(); Cloud.flush(); }
 document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); });
 window.addEventListener('pagehide', flush);
+window.addEventListener('storage', function (e) {
+  if (e.key !== KEY || !e.newValue) return;
+  try { if (mergeState(JSON.parse(e.newValue)) && typeof Render !== 'undefined') Render.soon(); } catch (er) {}
+});
+function byteSize(s) { try { return new Blob([s]).size; } catch (e) { return s.length * 3; } }
 
 /* Claude artifact database (long-term storage when the page runs as a published artifact) */
 var Cloud = {
-  ref: null, ready: false, busy: false, dirty: false, status: 'off',
+  ref: null, ready: false, busy: false, dirty: false, status: 'off', lastBody: '',
   init: function () {
     var self = this;
     if (!window.claude || typeof window.claude.use !== 'function') return Promise.resolve(false);
@@ -172,27 +195,47 @@ var Cloud = {
         if (!id) { self.status = 'off'; return false; }
         self.ref = db.doc('data/users/' + id + '/' + APP);
         return self.ref.get().then(function (snap) {
-          var changed = false;
+          var changed = false, cloudBody = '';
           if (snap && snap.exists) {
             var d = snap.data() || {};
-            try { changed = mergeState(JSON.parse(d.json || '{}')); } catch (e) {}
+            cloudBody = d.json || '';
+            try { changed = mergeState(JSON.parse(cloudBody || '{}')); } catch (e) {}
           }
           self.ready = true; self.status = 'on';
-          self.saveSoon();
+          if (JSON.stringify(S) !== cloudBody) self.saveSoon();
+          self.watch();
           return changed;
         });
       });
     }).catch(function () { self.status = 'error'; return false; });
   },
+  /* another device or tab saved: fold its records in */
+  watch: function () {
+    var self = this;
+    try {
+      self.ref.onSnapshot(function (snap) {
+        if (!snap || !snap.exists || (snap.metadata && snap.metadata.hasPendingWrites)) return;
+        var d = snap.data() || {};
+        if (!d.json || d.json === self.lastBody) return;
+        try { if (mergeState(JSON.parse(d.json))) { lsSet(JSON.stringify(S)); if (typeof Render !== 'undefined') Render.soon(); } } catch (e) {}
+      }, function () {});
+    } catch (e) {}
+  },
   write: function () {
     var self = this;
     if (!self.ready || !self.ref) return;
     if (self.busy) { self.dirty = true; return; }
-    self.busy = true; self.dirty = false;
     var body = JSON.stringify(S);
-    if (body.length > 240000) { var slim = JSON.parse(body); slim.pos = { u: 0 }; body = JSON.stringify(slim); }
-    self.ref.set({ json: body, u: now(), app: APP }).then(function () { self.status = 'on'; }).catch(function (e) {
-      self.status = (e && e.code === 'invalid_argument') ? 'readonly' : 'error';
+    if (byteSize(body) > 250000) {
+      var slim = JSON.parse(body); slim.pos = { u: 0 };
+      for (var id in slim.hl) { var h = slim.hl[id]; if (h && h.segs) h.segs.forEach(function (sg) { sg.pre = sg.pre.slice(-10); sg.suf = sg.suf.slice(0, 10); }); }
+      body = JSON.stringify(slim);
+      if (byteSize(body) > 250000) { self.status = 'toolarge'; return; }
+    }
+    if (body === self.lastBody) return;
+    self.busy = true; self.dirty = false;
+    self.ref.set({ json: body, u: now(), app: APP }).then(function () { self.status = 'on'; self.lastBody = body; }).catch(function (e) {
+      self.status = (e && e.code === 'invalid_argument') ? 'readonly' : (e && e.code === 'quota_exceeded') ? 'toolarge' : 'error';
     }).then(function () { self.busy = false; if (self.dirty) self.write(); });
   },
   saveSoon: debounce(function () { Cloud.write(); }, 2500),

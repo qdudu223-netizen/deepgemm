@@ -45,7 +45,7 @@ SEC_RE = r'§\d+(?:\.\d+)*'
 TAG_RE = r'【[^【】\n]{1,40}】'
 _CORE = r'\d(?:\d|,(?=\d{3}))*(?:\.\d+)*'
 _UNIT = r'(?:年代|世纪|年|月|日|亿|万|%|％)'
-NUM_RE = r'(?<![A-Za-z0-9.\-])' + _CORE + _UNIT + r'?(?:(?:–|—|−|-|～|~|/|／)?' + _CORE + _UNIT + r'?)*(?![A-Za-z])'
+NUM_RE = r'(?<![A-Za-z0-9.\-–—～~/／])' + _CORE + _UNIT + r'?(?:(?:–|—|−|-|～|~|/|／)?' + _CORE + _UNIT + r'?)*(?![A-Za-z])'
 MK_RE = r'[🔵⚫🟢🔴🟡⭐✅★]'
 INLINE_RE = re.compile('(?P<url>%s)|(?P<ref>%s)|(?P<sec>%s)|(?P<tag>%s)|(?P<num>%s)|(?P<mk>%s)' % (
     URL_RE, REF_RE, SEC_RE, TAG_RE, NUM_RE, MK_RE))
@@ -62,7 +62,36 @@ def tag_kind(inner):
                    ('原始史料', 'src'), ('深析', 'src')):
         if inner.startswith(pre):
             return k
+    # mixed tags such as 【相近观点：推断】【直接鼓舞：课本p.68】【p.91】
+    for key, k in (('推断', 'inf'), ('课本', 'src'), ('所给材料', 'src'), ('已核实', 'ok'), ('待查证', 'tbd')):
+        if key in inner:
+            return k
+    if re.match(r'^pp?\.\d', inner):
+        return 'src'
     return 'misc'
+
+
+TAG_INNER_RE = re.compile('(?P<ref>%s)|(?P<sec>%s)' % (r'〔R\d+〕', r'§\d+(?:\.\d+)*'))
+
+
+def tag_inner_html(s):
+    """Escape a 【…】 tag but keep 〔Rn〕 / §n.n inside it clickable."""
+    out, pos = [], 0
+    for m in TAG_INNER_RE.finditer(s):
+        out.append(esc(s[pos:m.start()]))
+        g = m.group(0)
+        if m.lastgroup == 'ref':
+            rid = g[1:-1]
+            out.append('<a class="ref" href="#ref-%s" data-ref="%s">%s</a>' % (rid, rid, esc(g)))
+            STATS['refs'] += 1
+        else:
+            tid = NUM2ID.get(g[1:])
+            out.append('<a class="secref" href="#%s">%s</a>' % (tid, esc(g)) if tid else esc(g))
+            if tid:
+                STATS['secrefs'] += 1
+        pos = m.end()
+    out.append(esc(s[pos:]))
+    return ''.join(out)
 
 
 def trim_url(u):
@@ -95,14 +124,14 @@ def xform(text, nonum=False):
         elif kind == 'sec':
             num = s[1:]
             tid = NUM2ID.get(num)
-            if tid:
+            if tid and not CTX['nonum']:   # headings keep their own “§n” as plain text
                 out.append('<a class="secref" href="#%s">%s</a>' % (tid, esc(s)))
                 STATS['secrefs'] += 1
             else:
                 out.append(esc(s))
         elif kind == 'tag':
             k = tag_kind(s[1:-1])
-            out.append('<span class="tag tag-%s">%s</span>' % (k, esc(s)))
+            out.append('<span class="tag tag-%s">%s</span>' % (k, tag_inner_html(s)))
             STATS['tags'] += 1
         elif kind == 'num':
             before = text[max(0, start - 3):start]
@@ -259,10 +288,26 @@ def load_supplements():
     return items, overview
 
 
+SUPP_NUM = re.compile(NUM_RE)
+
+
+def supp_text(s):
+    """Escape supplement text; wrap years/figures in .num so 遮年份数字 masks diagrams too."""
+    out, pos = [], 0
+    for m in SUPP_NUM.finditer(s):
+        out.append(esc(s[pos:m.start()]))
+        before = s[max(0, m.start() - 3):m.start()]
+        g = m.group(0)
+        out.append(esc(g) if any(before.endswith(b) for b in NO_NUM_BEFORE) else '<span class="num">%s</span>' % esc(g))
+        pos = m.end()
+    out.append(esc(s[pos:]))
+    return ''.join(out)
+
+
 def md_bold(s):
-    """Escape and turn **x** into <b>."""
-    s = esc(s)
-    return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', s)
+    """Escape and turn **x** into <b> (numbers wrapped for masking)."""
+    parts = str(s).split('**')
+    return ''.join(('<b>%s</b>' if i % 2 else '%s') % supp_text(p) for i, p in enumerate(parts))
 
 
 def refs_html(it):
@@ -346,7 +391,10 @@ def render_diagram(d):
     if k == 'tree':
         def node(n, depth):
             kids = n.get('children') or []
-            inner = '<span class="dg-node%s">%s%s</span>' % (tone_cls(n), md_bold(n['t']),
+            label = md_bold(n['t'])
+            if n.get('href'):
+                label = '<a class="dg-link" href="#%s">%s</a>' % (n['href'], label)
+            inner = '<span class="dg-node%s">%s%s</span>' % (tone_cls(n), label,
                                                            ('<span class="dg-d">%s</span>' % md_bold(n['d'])) if n.get('d') else '')
             if kids:
                 inner += '<ul>%s</ul>' % ''.join(node(c, depth + 1) for c in kids)
@@ -552,9 +600,14 @@ def block_html(k, with_after=True):
 ANSWER_BTN = '<div class="answer-bar js-only"><button type="button" class="ans-toggle" aria-expanded="false" data-label="%s">%s</button></div>'
 
 
-def fold(entries, start_pred, label, stop_pred=None, include_start=False):
+CLOZE_ALL_BTN = ('<div class="answer-bar js-only"><button type="button" class="ans-toggle cloze-all" aria-expanded="false" '
+                 'data-label="显示全部判断">显示全部判断</button></div>\n')
+
+
+def fold(entries, start_pred, label, stop_pred=None, keep_open=None):
     """Wrap runs of blocks after a start paragraph into an answer container.
-    Returns new entries list with ('html', str) items for folded runs."""
+    Returns new entries list with ('html', str) items for folded runs.
+    keep_open(run) -> True leaves a run visible (its answers are hidden cell by cell instead)."""
     out = []
     n = len(entries)
     i = 0
@@ -567,7 +620,10 @@ def fold(entries, start_pred, label, stop_pred=None, include_start=False):
             while j < n and entries[j][0] == 'blk' and not start_pred(entries[j][1]) and not (stop_pred and stop_pred(entries[j][1])):
                 run.append(entries[j])
                 j += 1
-            if run:
+            if run and keep_open and keep_open(run):
+                out.append(('html', CLOZE_ALL_BTN))
+                out.extend(run)
+            elif run:
                 inner = ''.join(group_blocks(run))
                 out.append(('html', '<div class="answer" data-answer>%s<div class="answer-body">%s</div></div>\n' % (
                     ANSWER_BTN % (label, label), inner)))
@@ -632,7 +688,13 @@ def apply_section_specials(sid, entries):
                                 add_class(t, 'cloze-cell')
                                 CLOZE_DONE.append('fact')
         q = lambda k: starts_strong(k, r'(?:[①-⑩]|Q\d)')  # noqa: E731
-        return fold(entries, q, '显示答案')
+
+        def statements_table(run):
+            a, b = BLOCKS[run[0][1]]
+            if tokens[a].type != 'table_open':
+                return False
+            return [mdparse.inline_text(t) for t in tokens[a:b] if t.type == 'inline'][:3] == ['陈述', '判断', '理由']
+        return fold(entries, q, '显示答案', keep_open=statements_table)
     if sid in ('s6-6-1', 's6-6-2'):
         start = lambda k: starts_strong(k, r'(?:考场可完成版|完整深化版)')  # noqa: E731
         stop = lambda k: starts_strong(k, r'表现层次')  # noqa: E731
@@ -744,9 +806,29 @@ def render_chapter(c):
     cid = h['id']
     pre = render_entries(c['pre'])
     folios = ''.join(render_folio(f) for f in c['folios'])
-    numeral = (h['num'] or '')
-    return ('<section class="chapter" id="%s" data-chap="%s">\n<header class="chap-head"><span class="chap-numeral" aria-hidden="true">%s</span>'
-            '<h2>%s</h2></header>\n%s%s</section>\n') % (cid, cid, esc('§' + numeral), heading_html(h), pre, folios)
+    return ('<section class="chapter" id="%s" data-chap="%s" data-num="%s">\n<header class="chap-head">'
+            '<h2>%s</h2></header>\n%s%s</section>\n') % (cid, cid, esc('§' + (h['num'] or '')), heading_html(h), pre, folios)
+
+
+MAP_LINKS = [('主题一', 's3-1'), ('背景', 's3-1'), ('成因', 's3-2'), ('政治腐败', 's3-2-1'), ('社会不平等', 's3-2-3'),
+             ('财政困境', 's3-2-4'), ('启蒙', 's3-2-5'), ('经过', 's3-3'), ('三级会议', 's3-3-1'), ('国民议会', 's3-3-2'),
+             ('君主立宪', 's3-3-3'), ('1799年政变', 's3-3-3'), ('主题二', 's3-4'), ('上台', 's3-4-1'), ('改革', 's3-4-1'),
+             ('战争', 's3-4-2'), ('评价', 's5-4'), ('主题三', 's3-5'), ('自由主义', 's3-5-1'), ('维也纳', 's3-5-2'),
+             ('1820', 's3-5-2'), ('中南美洲', 's3-5-3'), ('意德统一', 's3-5-4'), ('主题四', 's3-7'), ('蒙兀儿', 's3-7'),
+             ('鄂图曼', 's3-7'), ('历史技能', 's3-4-2'), ('史实与意见', 's3-4-2'), ('漫画', 's5-1')]
+
+
+def link_map_nodes(n):
+    """Make every knowledge-map node jump to its section."""
+    if not n:
+        return
+    for key, sid in MAP_LINKS:
+        if n['t'].startswith(key) or (key in n['t'] and len(key) > 2):
+            if sid in {h['id'] for h in HEADS}:
+                n['href'] = sid
+            break
+    for c in n.get('children') or []:
+        link_map_nodes(c)
 
 
 def render_overview():
@@ -763,12 +845,14 @@ def render_overview():
     kws = ''.join('<span class="kw-chip" data-q="%s">%s</span>' % (attr(k.get('q') or k['k']), esc(k['k'])) for k in ov.get('keywords', []))
     mp = ''
     if ov.get('map'):
+        link_map_nodes(ov['map'].get('root'))
         mp = ('<figure class="supp fig ov-map" data-supp="diagram"><figcaption><span class="supp-badge">知识地图 · 补充</span>'
               '<span class="fig-title">%s</span></figcaption><div class="fig-body">%s</div></figure>') % (
             md_bold(ov.get('map_title', '全课知识地图')), render_diagram(ov['map']))
     return ('<section class="overview supp" id="overview" data-supp="overview">'
             '<header class="ov-head"><span class="supp-badge">学习概览 · 补充</span><h2 class="ov-title">先看全局</h2></header>'
-            '<div class="ov-q"><span class="ov-q-label">核心问题</span><p>%s</p></div>'
+            '<div class="ov-q"><span class="ov-q-label">核心问题</span><p>%s</p>'
+            '<span class="ov-q-ans">一句话答案见 <a class="secref" href="#s1-3">§1.3</a> 的“综合回答”，展开见 <a class="secref" href="#s7-1">§7.1</a>。</span></div>'
             '<div class="ov-grid"><div class="ov-col"><h3 class="ov-h">各章一句话</h3><ol class="ov-chaps">%s</ol></div>'
             '<div class="ov-col"><h3 class="ov-h">关键词 <small class="js-only">点按即搜索</small></h3><div class="kw-chips">%s</div></div></div>'
             '%s</section>') % (md_bold(ov.get('question', '')), ''.join(rows), kws, mp)
@@ -835,9 +919,42 @@ def lab(h, v):
     return '%s：%s' % (h, v)
 
 
-for head, rows, sid in tables_where('s2-3', '概念'):
+def fill_same(rows):
+    """A card is shown alone, so a cell that says “同上” gets the cell above it."""
+    out = []
     for r in rows:
-        card('核心概念', '%s（%s）' % (r[0], r[1]), '\n'.join([lab(head[2], r[2]), lab(head[3], r[3])]), sid)
+        r = list(r)
+        if out:
+            for c, v in enumerate(r):
+                if v == '同上':
+                    r[c] = out[-1][c]
+                elif v.startswith('同上；'):
+                    r[c] = out[-1][c] + v[2:]
+        out.append(r)
+    return out
+
+
+def table_rows_raw(a, b):
+    rows, cur = [], None
+    for t in tokens[a:b]:
+        if t.type == 'tr_open':
+            cur = []
+        elif t.type == 'tr_close':
+            rows.append(cur)
+        elif t.type == 'inline' and cur is not None:
+            cur.append(t.content)
+    return rows
+
+
+for head, rows, sid in tables_where('s2-3', '概念'):
+    prev = None
+    for r in rows:
+        front = r[0] + r[1] if r[1].startswith('（') else '%s（%s）' % (r[0], r[1])
+        easy = r[3]
+        if '见上' in easy and prev:
+            easy = '%s（上一行：%s——%s）' % (easy, prev[0], prev[3])
+        card('核心概念', front, '\n'.join([lab(head[2], r[2]), lab(head[3], easy)]), sid)
+        prev = r
 for head, rows, sid in tables_where('s2-4', '香港课本'):
     for r in rows:
         card('译名对照', r[0], '\n'.join([lab(head[1], r[1]), lab(head[2], r[2])]), sid)
@@ -846,12 +963,14 @@ for head, rows, sid in tables_where('s2-1', '要素'):
     for r in rows:
         tag = '主题一至三' if len(head) == 3 else '课题延伸'
         card(deck, '%s · %s' % (tag, r[0]), r[1], sid)
-for head, rows, sid in tables_where('s3-3', '#'):
-    for r in rows:
-        card('历史定格', r[1], r[2], sid)
-for head, rows, sid in tables_where('s3-4', '#'):
-    for r in rows:
-        card('历史定格', r[1], r[2], sid)
+for sec in ('s3-3', 's3-4'):
+    for scope, head, rows, k in TABLES:
+        if sec in scope and head[0] == '#':
+            a, b = BLOCKS[k]
+            for r in table_rows_raw(a, b)[1:]:
+                m = re.match(r'^<strong>(.+?)</strong>[：:]?(.*)$', r[2], re.S)
+                if m:   # event → date (the 大事年表 decks already ask date → event)
+                    card('历史定格', strip_tags(m.group(1)), '%s：%s' % (strip_tags(r[1]), strip_tags(m.group(2)).strip()), scope[-1])
 for head, rows, sid in tables_where('s3-8-1', '时间'):
     for r in rows:
         back = r[1] + ('\n' + lab(head[3], r[3]) if r[3] not in ('—', '') else '')
@@ -882,10 +1001,10 @@ for head, rows, sid in tables_where('s4-8', '关系'):
     for r in rows:
         card('关系网络', r[0], '\n'.join([lab(head[1], r[1]), lab(head[2], r[2])]), sid)
 for head, rows, sid in tables_where('s5-1', '资料'):
-    for r in rows:
+    for r in fill_same(rows):
         card('史料分析', r[0], '\n'.join([lab(head[1], r[1]), lab(head[4], r[4])]), sid)
 for head, rows, sid in tables_where('s5-3', '议题'):
-    for r in rows:
+    for r in fill_same(rows):
         card('多元史学', '%s · %s' % (r[0], r[2]), '\n'.join([lab(head[1], r[1]), lab(head[5], r[5])]), sid, r[1][:10])
 for head, rows, sid in tables_where('s5-5', '#'):
     for r in rows:
@@ -943,11 +1062,19 @@ for label, items in list_items_after('s6-2'):
             card('考点卡', '%s · %d. %s' % (label, n, m.group(1)), m.group(2), 's6-2')
 
 NUM_CLOZE = re.compile(NUM_RE)
+# sentences without numbers: blank their key phrases (all words from the sentence itself)
+CLOZE_WORDS = {1: ['路易十四', '凡尔赛宫'], 4: ['条件', '直接原因'], 7: ['法律平等', '政治自由与民主'], 8: ['有意', '非预期', '西属美洲独立']}
 for label, items in list_items_after('s7-1'):
-    if label is None or '核心总结' in (label or '') or True:
-        for n, it in enumerate(items, 1):
-            if len(items) == 10:
-                card('核心总结·填空', '%d. %s' % (n, NUM_CLOZE.sub('［　　］', it)), it, 's7-1')
+    for n, it in enumerate(items, 1):
+        if len(items) != 10:
+            continue
+        front = NUM_CLOZE.sub('［　　］', it)
+        if front == it:
+            for w in CLOZE_WORDS.get(n, []):
+                assert w in front, (n, w)
+                front = front.replace(w, '［　　］', 1)
+        if front != it:
+            card('核心总结·填空', '%d. %s' % (n, front), it, 's7-1')
     break
 
 # 7.4 consolidation questions with answers
@@ -974,8 +1101,18 @@ for k, (a, b) in enumerate(BLOCKS):
         items = [strip_tags(t.content) for t in tokens[a:b] if t.type == 'inline']
         main = [x for x in items if x.startswith('考场版') or x.startswith('资料线索') or x.startswith('议题') or x.startswith('理由') or x.startswith('Q1 漫画家')]
         if main:
-            card('课本练习', cur_q, '\n'.join(items[:2]), 's6-4')
+            q = cur_q
+            if q.startswith('⑦'):   # the questions themselves are printed in §3.4
+                q7 = '①漫画家对拿破仑有什么看法？试从漫画中引用线索支持答案。②就你对漫画的理解，为什么漫画家会持这种看法？'
+                assert q7 in CONV
+                q = q + '\n' + q7
+            card('课本练习', q, '\n'.join(items[:2]), 's6-4')
         cur_q = None
+    elif tokens[a].type == 'table_open':
+        rows = table_rows(a, b)
+        if rows[0][:3] == ['陈述', '判断', '理由']:
+            for r in rows[1:]:
+                card('课本练习', '史实还是意见？\n' + r[0], '%s：%s' % (r[1], r[2]), 's6-4')
 
 # dedupe ids
 seen = set()
