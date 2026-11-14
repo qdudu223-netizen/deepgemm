@@ -817,3 +817,8 @@ mark.hl .tag { background: transparent; }
 .dg-link:hover { text-decoration: underline; }
 .dg-tree-root > li > .dg-node .dg-link { color: var(--sheet) !important; }
 .ov-q-ans { grid-column: 1 / -1; font-size: var(--t-sm); color: var(--ink-2); }
+/* 🔵 structure markers on list items and table cells follow the legend too */
+li.t-struct { padding: .1em .45em; border-radius: 4px; background: var(--primary-tint); }
+.mgrp li.t-struct { background: color-mix(in srgb, var(--sheet) 55%, transparent); }
+td.t-struct { box-shadow: inset 3px 0 0 var(--primary); }
+td.t-base { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--base) 55%, transparent); }
