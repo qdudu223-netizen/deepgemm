@@ -1,0 +1,55 @@
+/* ---- figures (图解) : shared by every diagram ---- */
+.fig { margin: 1.6em 0; padding: 0; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line); }
+.fig-cap { display: flex; align-items: baseline; gap: .6em; flex-wrap: wrap; padding: .7em 0 .5em; font-family: var(--f-serif); font-size: var(--fs-0); font-weight: 700; color: var(--ink); line-height: 1.35; }
+.fig-no { font-family: var(--f-mono); font-size: var(--fs-s); font-weight: 500; letter-spacing: .06em; color: var(--blue); }
+.fig-body { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: .2em 0 .6em; }
+.fig-body > svg { display: block; width: 100%; height: auto; }
+.fig-note { margin: 0 0 .8em; font-size: var(--fs-s); line-height: 1.6; color: var(--ink-3); }
+.fig-legend { display: flex; flex-wrap: wrap; gap: .4em 1.2em; margin: 0 0 .6em; font-size: var(--fs-s); color: var(--ink-2); }
+.fig-legend i { display: inline-block; width: .9em; height: .9em; border-radius: 2px; vertical-align: -.1em; margin-right: .35em; }
+
+/* SVG vocabulary — use ONLY these classes inside diagrams */
+svg.dg { font-family: var(--f-sans); overflow: visible; }
+svg.dg text { fill: var(--ink); font-size: 13px; }
+svg.dg .t-s { font-size: 11px; fill: var(--ink-3); }
+svg.dg .t-l { font-size: 15px; }
+svg.dg .t-b { font-weight: 700; }
+svg.dg .t-serif { font-family: var(--f-serif); font-weight: 700; }
+svg.dg .t-num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+svg.dg .t-mute { fill: var(--ink-3); }
+svg.dg .t-blue { fill: var(--blue); }
+svg.dg .t-red { fill: var(--red); }
+svg.dg .t-yel { fill: var(--yel); }
+svg.dg .t-grn { fill: var(--grn); }
+svg.dg .t-inv { fill: var(--surface); }
+svg.dg .box { fill: var(--surface); stroke: var(--line-2); stroke-width: 1; }
+svg.dg .box-blue { fill: var(--blue-tint); stroke: var(--blue); stroke-width: 1; }
+svg.dg .box-red { fill: var(--red-tint); stroke: var(--red); stroke-width: 1; }
+svg.dg .box-yel { fill: var(--yel-tint); stroke: var(--yel); stroke-width: 1; }
+svg.dg .box-grn { fill: var(--grn-tint); stroke: var(--grn); stroke-width: 1; }
+svg.dg .box-gray { fill: var(--gray-tint); stroke: var(--line-2); stroke-width: 1; }
+svg.dg .box-ink { fill: var(--blue); stroke: none; }
+svg.dg .band { fill: var(--surface-2); stroke: none; }
+svg.dg .band-blue { fill: var(--blue-tint); stroke: none; }
+svg.dg .bar { fill: var(--blue); }
+svg.dg .bar-2 { fill: var(--blue); fill-opacity: .45; }
+svg.dg .bar-red { fill: var(--red); }
+svg.dg .bar-yel { fill: var(--yel-fill); }
+svg.dg .bar-grn { fill: var(--grn); }
+svg.dg .bar-gray { fill: var(--gray); fill-opacity: .55; }
+svg.dg .ln { stroke: var(--line-2); stroke-width: 1; fill: none; }
+svg.dg .ln-ink { stroke: var(--ink-2); stroke-width: 1.4; fill: none; }
+svg.dg .ln-blue { stroke: var(--blue); stroke-width: 1.6; fill: none; }
+svg.dg .ln-red { stroke: var(--red); stroke-width: 1.6; fill: none; }
+svg.dg .ln-dash { stroke: var(--ink-3); stroke-width: 1.2; stroke-dasharray: 4 3; fill: none; }
+svg.dg .grid { stroke: var(--line); stroke-width: 1; fill: none; }
+svg.dg .ah { fill: var(--ink-2); }
+svg.dg .ah-blue { fill: var(--blue); }
+svg.dg .ah-red { fill: var(--red); }
+svg.dg .dot { fill: var(--blue); }
+svg.dg .dot-o { fill: var(--surface); stroke: var(--blue); stroke-width: 1.5; }
+svg.dg .dot-red { fill: var(--red); }
+svg.dg .dot-grn { fill: var(--grn); }
+svg.dg .hit { cursor: pointer; }
+svg.dg .hit:hover .box, svg.dg .hit:focus .box, svg.dg .hit.on .box { stroke-width: 2; }
+svg.dg .dim { opacity: .25; }

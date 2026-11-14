@@ -1,0 +1,85 @@
+/* Layout: sidenote ("旁注式") study page — left index rail, a ~38-character reading column, right margin for 补充 notes.
+   Imagery: Victorian patent specifications & engineering drawings — drafting paper, Prussian-blue ink lines, Caslon numerals. */
+:root {
+  --paper: #F2F3EE;        /* drafting paper, slightly cool */
+  --surface: #FAFAF7;      /* card / plate */
+  --surface-2: #ECEEE7;    /* table head, wells */
+  --line: #D3D7CE;         /* hairlines */
+  --line-2: #B9BFB4;
+  --line-3: #858B82;       /* boundaries of inputs & check boxes (>= 3:1) */
+  --ink: #23272C;          /* graphite text (not pure black) */
+  --ink-2: #474E56;
+  --ink-3: #5F666E;        /* muted, still >= 4.5:1 on paper */
+  --blue: #1F4C78;         /* Prussian blue = main colour = 结构 */
+  --blue-ink: #173B5E;
+  --blue-tint: #E2EAF2;
+  --red: #A5302B;          /* 核心考点 */
+  --red-tint: #F5E3E0;
+  --yel: #7E5300;          /* 易混易错 (text) */
+  --yel-fill: #E9B23A;
+  --yel-tint: #FAEFD0;
+  --grn: #2B6A5A;          /* 扩展 */
+  --grn-tint: #DFEDE7;
+  --gray: #59606A;         /* 基础内容 */
+  --gray-tint: #E8EAE5;
+  --mask: #C9CEC3;         /* recitation mask */
+  --mask-ink: #8C9388;
+  --search: #1F4C78;       /* search hit outline */
+  /* highlighter (not part of the 6-colour palette) */
+  --hl-b1: rgba(191, 227, 255, .80);
+  --hl-b2: rgba(111, 168, 255, .55);
+  --hl-y: rgba(255, 184, 77, .55);
+  --hl-r: rgba(255, 107, 107, .42);
+  --shadow: 0 1px 2px rgba(20, 30, 40, .06), 0 6px 18px rgba(20, 30, 40, .08);
+
+  --f-serif: "Libre Caslon Text", "Noto Serif SC", "Source Han Serif SC", "Source Han Serif CN", "Songti SC", "STSong", "SimSun", serif;
+  --f-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* type scale: 5 reading steps, headings at ratio 1.25 */
+  --fs-xs: .7rem;          /* decorative mono labels & micro UI only */
+  --fs-s: .875rem;         /* tables, captions, notes, UI */
+  --fs-0: 1rem;
+  --fs-1: 1.25rem;
+  --fs-2: 1.5625rem;
+  --fs-3: 1.953rem;
+
+  --measure: 38em;          /* ~38 Chinese characters per line */
+  --side: 288px;            /* left rail */
+  --margin-notes: 270px;    /* right margin for sidenotes */
+  --radius: 6px;
+  --t: .18s;
+  color-scheme: light;
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-ir-theme="light"]) {
+    --paper: #14181C; --surface: #1A1F24; --surface-2: #222830; --line: #313840; --line-2: #434B54;
+    --ink: #E2E5E7; --ink-2: #BCC2C7; --ink-3: #9AA1A8;
+    --blue: #8DB5DE; --blue-ink: #A9C8E8; --blue-tint: #1C2A37;
+    --red: #EE8A80; --red-tint: #3A2321;
+    --yel: #E9BC62; --yel-fill: #C9962C; --yel-tint: #362C1A;
+    --grn: #7DC3AD; --grn-tint: #1B302B;
+    --gray: #A9AFB5; --gray-tint: #242A30;
+    --mask: #3A424B; --mask-ink: #6E7781; --search: #A9C8E8; --line-3: #737C86;
+    --hl-b1: rgba(120, 180, 240, .30); --hl-b2: rgba(80, 140, 240, .30);
+    --hl-y: rgba(255, 184, 77, .28); --hl-r: rgba(255, 107, 107, .26);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .35);
+    color-scheme: dark;
+  }
+}
+@media screen {
+:root[data-theme="dark"]:not([data-ir-theme="light"]), :root[data-ir-theme="dark"] {
+  --paper: #14181C; --surface: #1A1F24; --surface-2: #222830; --line: #313840; --line-2: #434B54;
+  --ink: #E2E5E7; --ink-2: #BCC2C7; --ink-3: #9AA1A8;
+  --blue: #8DB5DE; --blue-ink: #A9C8E8; --blue-tint: #1C2A37;
+  --red: #EE8A80; --red-tint: #3A2321;
+  --yel: #E9BC62; --yel-fill: #C9962C; --yel-tint: #362C1A;
+  --grn: #7DC3AD; --grn-tint: #1B302B;
+  --gray: #A9AFB5; --gray-tint: #242A30;
+  --mask: #3A424B; --mask-ink: #6E7781; --search: #A9C8E8; --line-3: #737C86;
+  --hl-b1: rgba(120, 180, 240, .30); --hl-b2: rgba(80, 140, 240, .30);
+  --hl-y: rgba(255, 184, 77, .28); --hl-r: rgba(255, 107, 107, .26);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .35);
+  color-scheme: dark;
+}
+}
