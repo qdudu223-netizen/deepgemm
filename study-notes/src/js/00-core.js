@@ -144,6 +144,9 @@ function mergeState(inc, opts) {
       if (k === 'hl' && opts && opts.revive && a && a.del && !b.del && b.segs) {
         dst[id] = Object.assign({}, b, { u: now() }); delete dst[id].del; changed = true; revived++; continue;
       }
+      if (k !== 'hl' && opts && opts.revive && a && (b.u || 0) <= (a.u || 0) && ((k === 'mastered' && b.v && !a.v) || (k === 'fc' && (b.n || 0) > (a.n || 0)))) {
+        dst[id] = Object.assign({}, b, { u: now() }); changed = true; continue;
+      }
       if (!a || (b.u || 0) > (a.u || 0)) { dst[id] = b; changed = true; if (k === 'hl' && !b.del && (!a || a.del)) revived++; }
     }
   });
@@ -151,12 +154,16 @@ function mergeState(inc, opts) {
     var a = S.rev[sid], b = inc.rev[sid];
     if (!b || !Array.isArray(b.d)) continue;
     if (!a) { S.rev[sid] = b; changed = true; continue; }
-    if (a.clr || b.clr) { if ((b.u || 0) > (a.u || 0)) { S.rev[sid] = b; changed = true; } continue; }
+    if (a.clr || b.clr) {
+      if ((b.u || 0) > (a.u || 0) || (opts && opts.revive && b.d.length && !a.d.length)) { S.rev[sid] = Object.assign({}, b, { u: Math.max(b.u || 0, opts && opts.revive ? now() : 0) }); changed = true; }
+      continue;
+    }
     var set = {}; (a.d || []).concat(b.d).forEach(function (d) { set[d] = 1; });
     var merged = Object.keys(set).sort();
     if (merged.length !== (a.d || []).length) { a.d = merged; a.u = Math.max(a.u || 0, b.u || 0); changed = true; }
   }
   if ((inc.set.u || 0) > (S.set.u || 0)) { S.set = inc.set; changed = true; }
+  else if (opts && opts.revive && inc.set.u && JSON.stringify(inc.set) !== JSON.stringify(S.set)) { S.set = Object.assign({}, inc.set, { u: now() }); changed = true; }
   if ((inc.pos.u || 0) > (S.pos.u || 0)) { S.pos = inc.pos; }
   mergeState.revived = revived;
   return changed;
@@ -226,11 +233,12 @@ var Cloud = {
     if (!self.ready || !self.ref) return;
     if (self.busy) { self.dirty = true; return; }
     var body = JSON.stringify(S);
-    if (byteSize(body) > 250000) {
+    var docSize = function (b) { return byteSize(JSON.stringify({ json: b, u: now(), app: APP })); };
+    if (docSize(body) > 250000) {
       var slim = JSON.parse(body); slim.pos = { u: 0 };
       for (var id in slim.hl) { var h = slim.hl[id]; if (h && h.segs) h.segs.forEach(function (sg) { sg.pre = sg.pre.slice(-10); sg.suf = sg.suf.slice(0, 10); }); }
       body = JSON.stringify(slim);
-      if (byteSize(body) > 250000) { self.status = 'toolarge'; return; }
+      if (docSize(body) > 250000) { self.status = 'toolarge'; return; }
     }
     if (body === self.lastBody) return;
     self.busy = true; self.dirty = false;

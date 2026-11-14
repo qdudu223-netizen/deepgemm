@@ -1,5 +1,5 @@
 /* ===================================================================== search */
-var UNIT_SEL = 'h1, h2, h3, h4, p, li, td, th, pre, .dg-step, .dg-ev, .dg-card, .dg-layer, .dg-side h5, .dg-branch, .dg-from, .dg-node, .dg-bar, .dg-prow, .dg-phase, .dg-verdict, .mn-verse, .fig-title, .mn-title, .mm-node, .ov-line';
+var UNIT_SEL = 'h1, h2, h3, h4, p, li, td, th, pre, .dg-step, .dg-ev, .dg-card, .dg-layer, .dg-side h5, .dg-branch, .dg-from, .dg-node, .dg-bar, .dg-prow, .dg-phase, .dg-verdict, .mn-verse, .fig-title, .mn-title, .mm-node';
 function ownText(el) {
   if (el.tagName !== 'LI') return el.textContent;
   var s = '';

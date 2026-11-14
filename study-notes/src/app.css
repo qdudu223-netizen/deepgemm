@@ -347,7 +347,7 @@ body {
 #fr-root h1 strong, #fr-root h2 strong, #fr-root h3 strong, #fr-root h4 strong { text-decoration: none; }
 #fr-root em { font-style: italic; font-family: var(--f-display), var(--f-sans); }
 .mk { font-size: .92em; margin-right: .12em; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
-.tag { display: inline; font-size: var(--t-sm); line-height: 1; padding: .1em .15em; border-radius: 3px; color: var(--ink-3); background: var(--base-tint); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.tag { display: inline; font-size: var(--t-sm); line-height: 1; padding: .1em .15em; border-radius: 3px; white-space: nowrap; color: var(--ink-3); background: var(--base-tint); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .tag-ok { color: var(--ext); background: var(--ext-tint); }
 .tag-inf { color: var(--primary); background: var(--primary-tint); }
 .tag-tbd { color: var(--warn); background: var(--warn-tint); }
@@ -822,3 +822,11 @@ li.t-struct { padding: .1em .45em; border-radius: 4px; background: var(--primary
 .mgrp li.t-struct { background: color-mix(in srgb, var(--sheet) 55%, transparent); }
 td.t-struct { box-shadow: inset 3px 0 0 var(--primary); }
 td.t-base { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--base) 55%, transparent); }
+
+/* QA round 2 */
+.nobr { white-space: nowrap; }
+.ref mark.hl, a mark.hl, .tag mark.hl { color: var(--ink-2) !important; }
+@media (pointer: coarse) {
+  .ov-map .dg-node:has(.dg-link) { padding: 0; }
+  .ov-map .dg-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; }
+}

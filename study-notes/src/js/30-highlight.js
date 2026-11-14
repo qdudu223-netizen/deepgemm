@@ -522,7 +522,9 @@ var HL = {
       var pre = r.segs[0].pre, suf = r.segs[r.segs.length - 1].suf;
       pre = pre.replace(/^[\s\S]*\n/, '').replace(/\s+/g, ' ').slice(-16);
       suf = clean(suf).slice(0, 16);
-      return { id: 'hl:' + r.id, deck: '我的荧光笔', f: (pre ? '…' + pre : '') + '［　　］' + (suf ? suf + '…' : ''), b: self.textOf(r) + (r.note ? '\n批注：' + r.note : ''), s: r.sid, hid: r.id };
+      var front = (pre ? '…' + pre : '') + '［　　］' + (suf ? suf + '…' : '');
+      if (!pre && !suf) { var fo = r.sid && document.getElementById(r.sid); front = '［　　］\n（出自：' + (fo ? fo.getAttribute('data-title') : '本页') + (r.note ? '；批注：' + r.note : '') + '）'; }
+      return { id: 'hl:' + r.id, deck: '我的荧光笔', f: front, b: self.textOf(r) + (r.note ? '\n批注：' + r.note : ''), s: r.sid, hid: r.id };
     });
   },
 

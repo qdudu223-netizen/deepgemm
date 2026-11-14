@@ -52,6 +52,7 @@ INLINE_RE = re.compile('(?P<url>%s)|(?P<ref>%s)|(?P<sec>%s)|(?P<tag>%s)|(?P<num>
 NO_NUM_BEFORE = ('资料', '图片', '课题', '单元', '程度', '通函第', '注', 'pp.', 'p.', '编号', '第一', '第二')
 
 CTX = {'nonum': False}
+CLOSE_PUNCT = '；，。、）：！？”’】〕'
 STATS = {'urls': [], 'refs': 0, 'secrefs': 0, 'tags': 0, 'nums': 0}
 
 
@@ -119,8 +120,14 @@ def xform(text, nonum=False):
         out.append(esc(text[pos:start]))
         if kind == 'ref':
             rid = s[1:-1]
-            out.append('<a class="ref" href="#ref-%s" data-ref="%s">%s</a>' % (rid, rid, esc(s)))
+            ref_html = '<a class="ref" href="#ref-%s" data-ref="%s">%s</a>' % (rid, rid, esc(s))
             STATS['refs'] += 1
+            nxt = text[m.end():m.end() + 1]
+            if nxt and nxt in CLOSE_PUNCT:
+                out.append('<span class="nobr">%s%s</span>' % (ref_html, esc(nxt)))
+                pos = m.end() + 1
+                continue
+            out.append(ref_html)
         elif kind == 'sec':
             num = s[1:]
             tid = NUM2ID.get(num)
@@ -131,8 +138,14 @@ def xform(text, nonum=False):
                 out.append(esc(s))
         elif kind == 'tag':
             k = tag_kind(s[1:-1])
-            out.append('<span class="tag tag-%s">%s</span>' % (k, tag_inner_html(s)))
+            html_tag = '<span class="tag tag-%s">%s</span>' % (k, tag_inner_html(s))
             STATS['tags'] += 1
+            nxt = text[m.end():m.end() + 1]
+            if nxt and nxt in CLOSE_PUNCT:
+                out.append('<span class="nobr">%s%s</span>' % (html_tag, esc(nxt)))
+                pos = m.end() + 1
+                continue
+            out.append(html_tag)
         elif kind == 'num':
             before = text[max(0, start - 3):start]
             if nonum or CTX['nonum'] or any(before.endswith(b) for b in NO_NUM_BEFORE):
