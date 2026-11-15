@@ -130,7 +130,7 @@ var Search = {
   hidePanel: function () { $('#search-panel').hidden = true; },
   step: function (d) {
     if (!this.marks.length) return;
-    if (this.cur >= 0 && this.marks[this.cur]) this.marks[this.cur].classList.remove('cur');
+    $$('mark.sh.cur', DOC).forEach(function (x) { x.classList.remove('cur'); });
     this.cur = (this.cur + d + this.marks.length) % this.marks.length;
     var m = this.marks[this.cur];
     if (!m.isConnected) { this.marks = $$('mark.sh0', DOC); return this.step(0); }
@@ -144,6 +144,7 @@ var Search = {
     var run = debounce(function () { self.run(q.value.trim()); }, 220);
     q.addEventListener('input', run);
     q.addEventListener('focus', function () { if (self.terms.length) $('#search-panel').hidden = false; });
+    q.addEventListener('click', function () { if (self.terms.length) $('#search-panel').hidden = false; });
     q.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();

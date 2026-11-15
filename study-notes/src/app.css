@@ -103,7 +103,6 @@ body {
   --t-md: var(--fs);
   --t-lg: calc(var(--fs) * 1.25);
   --t-xl: calc(var(--fs) * 1.5);
-  --t-2xl: calc(var(--fs) * 2.15);
   font-family: var(--f-sans);
   font-size: var(--fs);
   line-height: 1.75;
@@ -285,7 +284,7 @@ body {
 /* ------------------------------------------------------------ document head */
 .doc-head { padding: 22px 0 18px; margin-bottom: 18px; border-bottom: 3px double var(--primary); }
 .doc-kicker { font-family: var(--f-display); font-style: italic; color: var(--primary); letter-spacing: .06em; font-size: var(--t-sm); }
-.doc-head h1 { font-family: var(--f-serif); font-weight: 900; font-size: var(--t-2xl); line-height: 1.22; margin: .25em 0 .5em; letter-spacing: .01em; text-wrap: balance; color: var(--ink); }
+.doc-head h1 { font-family: var(--f-serif); font-weight: 900; font-size: var(--t-xl); line-height: 1.25; margin: .25em 0 .5em; letter-spacing: .01em; text-wrap: balance; color: var(--ink); }
 .doc-head h1 .tag { font-size: .42em; vertical-align: middle; }
 .doc-meta p { margin: 0 0 .7em; color: var(--ink-2); font-size: var(--t-sm); }
 .doc-meta blockquote.note { margin: 14px 0 0; }
@@ -771,10 +770,10 @@ mark.hl .tag { background: transparent; }
 .table-wrap table:has(thead th:nth-child(5)) { min-width: 40em; }
 /* diagrams */
 .dg-tree-root > li > .dg-node .dg-d { color: color-mix(in srgb, var(--sheet) 86%, transparent); }
-.dg-chain:has(> li:nth-child(9)) { flex-direction: column; align-items: stretch; }
-.dg-chain:has(> li:nth-child(9)) .dg-step { max-width: none; padding: 6px 10px; }
-.dg-chain:has(> li:nth-child(9)) .dg-arrow { flex-direction: row; gap: 8px; max-width: none; min-height: 22px; justify-content: flex-start; padding-left: 1.2em; }
-.dg-chain:has(> li:nth-child(9)) .dg-arrow::after { content: "↓"; order: -1; }
+.dg-chain:has(> li:nth-child(7)) { flex-direction: column; align-items: stretch; }
+.dg-chain:has(> li:nth-child(7)) .dg-step { max-width: none; padding: 6px 10px; }
+.dg-chain:has(> li:nth-child(7)) .dg-arrow { flex-direction: row; gap: 8px; max-width: none; min-height: 22px; justify-content: flex-start; padding-left: 1.2em; }
+.dg-chain:has(> li:nth-child(7)) .dg-arrow::after { content: "↓"; order: -1; }
 .dg-ev.is-star .dg-date::before { content: "⭐"; font-size: .8em; margin-right: 2px; }
 /* sidenote source line legible */
 .sn .supp-src { color: var(--ink-2); font-size: var(--t-xs); }
@@ -830,3 +829,33 @@ td.t-base { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--base) 55%, transp
   .ov-map .dg-node:has(.dg-link) { padding: 0; }
   .ov-map .dg-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; }
 }
+
+/* QA round 2b */
+.hlbar-up .toast { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 900px) { .hlbar-up .toast { bottom: calc(90px + env(safe-area-inset-bottom, 0px)); } }
+.folio-body ol.dg, .folio-body ul.mn-keys, .folio-body ul.dg-tree-root { padding-left: 0; margin: 0; }
+.folio-body ol.dg-timeline { padding-left: 0; }
+.dg-timeline::before { margin-left: -1px; }
+.dg-ev { grid-template-columns: 6.9em 1fr; }
+.dg-timeline::before { left: 7.5em; }
+.dg-ev::before { left: calc(7.5em - 5px); }
+.dg-timeline > .dg-phase { margin-left: 8.5em; }
+.dg-ev .dg-date { white-space: nowrap; }
+@media (max-width: 560px) {
+  .folio { padding: 18px 14px 14px; }
+  .mgrp { padding-left: .6em; padding-right: .6em; }
+  .folio-body ul, .folio-body ol { padding-left: 1.2em; }
+  .fc-card { min-height: min(38vh, 340px); }
+  .fc-face.back { -webkit-mask-image: linear-gradient(#000 88%, transparent); mask-image: linear-gradient(#000 88%, transparent); padding-bottom: 28px; }
+  .fc-bar { display: grid; grid-template-columns: auto auto; gap: 8px; }
+  .fc-bar .grow { display: none; }
+  .fc-bar .btn { justify-content: center; }
+}
+@media (pointer: coarse) {
+  .hl-pop .pen { width: 44px; height: 44px; }
+  .toast button { min-height: 44px; }
+  .sn-collapsed .sn .sn-head { min-height: 44px; }
+  #q, .field-row input[type="text"] { height: 44px; }
+}
+.flash-dialog > * { flex: none; }
+@media (max-width: 560px) { .deck-picker { max-height: 104px; } }

@@ -53,13 +53,17 @@ var Side = {
   isDrawer: function () { return window.innerWidth < 1100; },
   /* a closed drawer is off-screen: keep it out of the Tab order */
   syncInert: function () {
-    var off = this.isDrawer() && !this.el.classList.contains('open');
+    var open = this.el.classList.contains('open');
+    var off = this.isDrawer() && !open;
     if (off || modalStack.length) this.el.setAttribute('inert', ''); else this.el.removeAttribute('inert');
+    var cover = this.isDrawer() && open && !modalStack.length;
+    ['main', 'topbar', 'bottombar'].forEach(function (id) { var el = document.getElementById(id); if (!el || modalStack.length) return; if (cover) el.setAttribute('inert', ''); else el.removeAttribute('inert'); });
   },
   toggle: function () { if (this.el.classList.contains('open')) this.close(); else this.open(); },
   open: function (tab) {
     if (tab) this.tab(tab);
     if (!this.isDrawer()) return;
+    this.opener = document.activeElement;
     this.el.classList.add('open'); $('#scrim').classList.add('open');
     this.syncInert();
     var t = $('.side-tab[aria-selected="true"]', this.el); if (t) setTimeout(function () { try { t.focus({ preventScroll: true }); } catch (e) {} }, 60);
@@ -68,7 +72,7 @@ var Side = {
     var was = this.el.classList.contains('open');
     this.el.classList.remove('open'); $('#scrim').classList.remove('open');
     this.syncInert();
-    if (was && this.isDrawer()) { var m = $('#btn-menu'); if (m && m.offsetParent) m.focus({ preventScroll: true }); }
+    if (was && this.isDrawer()) { var m = this.opener && this.opener.offsetParent ? this.opener : $('#btn-menu'); if (m && m.offsetParent) m.focus({ preventScroll: true }); }
   },
   tab: function (name) {
     $$('.side-tab').forEach(function (b) { b.setAttribute('aria-selected', b.getAttribute('data-tab') === name ? 'true' : 'false'); });
@@ -363,7 +367,7 @@ var Theme = {
 };
 var FS_STEPS = [0.9, 1, 1.1, 1.2, 1.35];
 var FontSize = {
-  apply: function () { var i = clamp(+S.set.fs || 1, 0, FS_STEPS.length - 1); ROOT.style.setProperty('--fs-scale', FS_STEPS[i]); Margin.soon(); }
+  apply: function () { var v = +S.set.fs; var i = clamp(isNaN(v) ? 1 : v, 0, FS_STEPS.length - 1); ROOT.style.setProperty('--fs-scale', FS_STEPS[i]); Margin.soon(); }
 };
 
 /* ------------------------------------------------------------ sidenotes in the margin (wide screens) */

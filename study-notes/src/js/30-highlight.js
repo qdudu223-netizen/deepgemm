@@ -270,6 +270,7 @@ var HL = {
       bar.classList.remove('docked-top');
       var br = bar.getBoundingClientRect(), sr = range.getBoundingClientRect();
       if (sr.bottom > br.top - 12) bar.classList.add('docked-top');
+      document.body.classList.toggle('hlbar-up', !bar.classList.contains('docked-top'));
       return;
     }
     var rc = range.getBoundingClientRect(), w = bar.offsetWidth, h = bar.offsetHeight;
@@ -278,7 +279,7 @@ var HL = {
     bar.style.left = clamp(rc.left + rc.width / 2 - w / 2, 8, window.innerWidth - w - 8) + 'px';
     bar.style.top = clamp(top, 8, window.innerHeight - h - 8) + 'px';
   },
-  hideBar: function () { $('#hl-bar').hidden = true; },
+  hideBar: function () { $('#hl-bar').hidden = true; document.body.classList.remove('hlbar-up'); },
   autoT: null, touching: false,
   onSelection: function () {
     var r = this.currentRange();
@@ -351,7 +352,13 @@ var HL = {
   closePop: function () {
     var pop = $('#hl-pop'); if (pop.hidden) return;
     var v = $('#hp-note').value.trim();
-    if (this.popId && S.hl[this.popId] && (S.hl[this.popId].note || '') !== v) this.update(this.popId, { note: v }, true);
+    if (this.popId && S.hl[this.popId]) {
+      var r0 = S.hl[this.popId], nb = this.noteBefore && this.noteBefore.id === this.popId ? this.noteBefore : null;
+      var orig = nb ? nb.note : (r0.note || '');
+      if (orig !== v) this.push({ t: 'upd', id: this.popId, before: { c: r0.c, note: orig, card: r0.card } });
+      this.noteBefore = null;
+      if ((r0.note || '') !== v) this.update(this.popId, { note: v }, true);
+    }
     pop.hidden = true;
     $$('mark.hl.is-active').forEach(function (m) { m.classList.remove('is-active'); });
     this.popId = null;

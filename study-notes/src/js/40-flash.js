@@ -26,7 +26,9 @@ var FC = {
   onClose: function () { S.set.fcDecks = Object.keys(this.sel || {}); save({ localOnly: true }); },
   renderDecks: function () {
     var self = this;
-    var html = this.deckList().map(function (d) {
+    var list = this.deckList();
+    list.sort(function (a, b) { return (self.sel[b.name] ? 1 : 0) - (self.sel[a.name] ? 1 : 0); });
+    var html = list.map(function (d) {
       return '<button type="button" class="deck-chip" data-deck="' + esc(d.name) + '" aria-pressed="' + (self.sel[d.name] ? 'true' : 'false') + '">' + esc(d.name) + '<small>' + d.n + (d.weak ? ' · 不熟 ' + d.weak : '') + '</small></button>';
     }).join('');
     $('#fc-decks').innerHTML = '<button type="button" class="deck-chip" data-deck="*">全选 / 全不选</button>' + html;
@@ -71,7 +73,7 @@ var FC = {
     }
     var c = this.queue[this.pos], st = S.fc[c.id] || {};
     var front = this.reverse ? c.b : c.f, back = this.reverse ? c.f : c.b;
-    stage.innerHTML = '<div class="fc-card" tabindex="0" role="button" aria-label="点按翻面">' +
+    stage.innerHTML = '<div class="fc-card" tabindex="0" role="button" data-autofocus aria-label="点按翻面">' +
       '<div class="fc-face front"><div class="fc-deck"><span></span><span class="fc-weak-tag"></span></div><div class="fc-text"></div><div class="fc-deck"><span>点按翻面</span><span></span></div></div>' +
       '<div class="fc-face back"><div class="fc-deck"><span></span><span></span></div><div class="fc-text"></div></div></div>';
     var faces = $$('.fc-face', stage);
@@ -90,6 +92,8 @@ var FC = {
     var st = S.fc[c.id] || { n: 0 };
     S.fc[c.id] = { w: good ? 0 : 1, n: (st.n || 0) + 1, u: now() };
     save();
+    var chip = $('#fc-decks .deck-chip[data-deck="' + c.deck.replace(/"/g, '\\"') + '"] small');
+    if (chip) { var dl = this.deckList().filter(function (x) { return x.name === c.deck; })[0]; if (dl) chip.textContent = dl.n + (dl.weak ? ' · 不熟 ' + dl.weak : ''); }
     if (good) this.stats.good++; else {
       this.stats.bad++;
       var rest = this.queue.slice(this.pos + 1, this.pos + 6);

@@ -1015,10 +1015,10 @@ for head, rows, sid in tables_where('s4-8', '关系'):
         card('关系网络', r[0], '\n'.join([lab(head[1], r[1]), lab(head[2], r[2])]), sid)
 for head, rows, sid in tables_where('s5-1', '资料'):
     for r in fill_same(rows):
-        card('史料分析', r[0], '\n'.join([lab(head[1], r[1]), lab(head[4], r[4])]), sid)
+        card('史料分析', r[0], '\n'.join(lab(head[c], r[c]) for c in (1, 3, 4) if r[c] not in ('—', '')), sid)
 for head, rows, sid in tables_where('s5-3', '议题'):
     for r in fill_same(rows):
-        card('多元史学', '%s · %s' % (r[0], r[2]), '\n'.join([lab(head[1], r[1]), lab(head[5], r[5])]), sid, r[1][:10])
+        card('多元史学', '%s · %s' % (r[0], r[1]), '\n'.join(lab(head[c], r[c]) for c in (3, 4, 5, 2) if r[c] not in ('—', '')), sid, r[1][:10])
 for head, rows, sid in tables_where('s5-5', '#'):
     for r in rows:
         card('核心结论', '%s %s' % (r[0], r[1]), '\n'.join([lab(head[2], r[2]), lab(head[3], r[3])]), sid)
@@ -1096,7 +1096,27 @@ if len(q74) >= 2:
     for n, (qq, aa) in enumerate(zip(q74[0][1], q74[1][1]), 1):
         card('巩固题', '%d. %s' % (n, qq), aa, 's7-4')
 
-# 6.4 practice: question paragraph -> 考场版 answer
+# 6.4 practice: question paragraph -> 考场版 answer.
+# A card is shown alone, so questions about a picture or table carry that material (verbatim from the source).
+CONV_PLAIN = CONV.replace('**', '')
+
+
+def estates_table():
+    for scope, head, rows, k in TABLES:
+        if 's3-3' in scope and head[0] == '等级':
+            return '（资料）' + '／'.join('｜'.join(r) for r in rows)
+    raise KeyError('estates table')
+
+
+PRACTICE_MATERIAL = {
+    '①': ['漫画①，标题“希望这游戏快些完结”：年老的平民（标“第三等级”）拄着锄头弯着腰，背上驮着教士（标“第一等级”）和佩剑的贵族（标“第二等级”）；画面下方有兔子和鸟在啄食庄稼。',
+          '漫画②，标题“逝去的时光”：骷髅般的人物（标“第三等级”）拿着铲子；中间是几近赤裸的人物（标“第二等级”）；右边是穿红袍的枢机主教（标“第一等级”）。'],
+    '③': ['名言：“自由啊，自由！有多少罪行假借你的名义而行！”（法国大革命时期的政治家罗兰夫人被送上断头台前的遗言）'],
+    '④': ['资料5.67：一幅1803年发表的英国漫画：戴着巨大双角帽的拿破仑把“世界”（地球）塞进口中，一名“英国人”对他说：“它会卡在你的喉咙，让你窒息！”'],
+    '⑦': ['有关拿破仑的英国漫画（当时英国正与法国交战）：一个长角、长尾的“魔鬼”抱着襁褓中的婴儿“拿破仑”，说：“这是我的爱儿。”',
+          '①漫画家对拿破仑有什么看法？试从漫画中引用线索支持答案。②就你对漫画的理解，为什么漫画家会持这种看法？'],
+    '⑨': ['资料5.70：一幅描绘维也纳会议的画作，标题为《1814年的维也纳伟大统治者协会令欧洲重生》（维也纳是奥地利首都）；画中各国代表围着摆满地图、旁有地球仪的桌子。'],
+}
 cur_q = None
 for k, (a, b) in enumerate(BLOCKS):
     if 's6-4' not in SCOPE[a]:
@@ -1115,10 +1135,11 @@ for k, (a, b) in enumerate(BLOCKS):
         main = [x for x in items if x.startswith('考场版') or x.startswith('资料线索') or x.startswith('议题') or x.startswith('理由') or x.startswith('Q1 漫画家')]
         if main:
             q = cur_q
-            if q.startswith('⑦'):   # the questions themselves are printed in §3.4
-                q7 = '①漫画家对拿破仑有什么看法？试从漫画中引用线索支持答案。②就你对漫画的理解，为什么漫画家会持这种看法？'
-                assert q7 in CONV
-                q = q + '\n' + q7
+            for extra in PRACTICE_MATERIAL.get(q[:1] if not q.startswith('Q') else q[:2], []):
+                assert extra in CONV_PLAIN, extra[:30]
+                q = q + '\n' + extra
+            if q.startswith('Q2') or q.startswith('Q3'):
+                q = q + '\n' + estates_table()
             card('课本练习', q, '\n'.join(items[:2]), 's6-4')
         cur_q = None
     elif tokens[a].type == 'table_open':
